@@ -21,15 +21,16 @@ using namespace bridges;
 int bridges_test(int argc, char* argv[]) 
 {
     // Creating new BRIDGES object.
-    Bridges bridges(350, "estark3", "002");
-    bridges.setTitle("Accessing Wikipedia Data");
+    Bridges bridges(350, "estark3", "75927143440");
+    bridges.setTitle("GraphCrawler Test");
+    bridges.setDescription("Accessing Movie Wikidata");
     
     // Setting the data source to the bridges object.
     DataSource ds (&bridges);
 
-    std::vector<MovieActorWikiData> wiki_data = ds.getMovieActorWikiData(1990, 2010);
+    std::vector<MovieActorWikiData> wiki_data = ds.getMovieActorWikiData(2004, 2010);
 
-    std::cout << "Movies from 1990 to 2010: " << wiki_data.size() << "\n";
+    std::cout << "Movies from 2004 to 2010: " << wiki_data.size() << "\n";
 
     for (int i=0; i <5; i++) 
     {
