@@ -1,0 +1,14 @@
+# Evan Stark - February 23rd 2025 - ITCS 4145 001
+# Make file for the Graph Crawler Assignment.
+
+LDFLAGS=-lcurl
+LD=g++
+
+CXXFLAGS= -I ~/rapidjson/include
+CXXFLAGS= -I ~/bridges-cxx-3.4.5-x86_64-linux-gnu/include
+
+graph-crawler: graph_crawler.o
+	$(LD) -o $@ $< $(LDFLAGS)
+
+graph-crawler.o: graph-crawler.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
