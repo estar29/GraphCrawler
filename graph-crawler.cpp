@@ -18,7 +18,7 @@ using namespace std;
 
 using namespace bridges;
 
-int bridges_test(int argc, char* argv[]) 
+int main(int argc, char* argv[]) 
 {
     // Creating new BRIDGES object.
     Bridges bridges(350, "estark3", "75927143440");
