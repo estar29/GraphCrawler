@@ -3,40 +3,50 @@
 // on a graph hosted on a web-based server.
 
 // SOURCES USED
-// 
+// https://curl.se/libcurl/c/libcurl-tutorial.html
 
 // Importing all necessary libraries.
 #include <iostream>
 #include <vector>
 #include <string>
+#include <curl/curl.h>
+#include "rapidjson/document.h"
 
 using namespace std;
 
-#include "Bridges.h"
-#include "DataSource.h"
-#include "data_src/MovieActorWikidata.h"
+size_t output_test(char *ptr, size_t size, size_t nmemb, void *userdata) {
+  std::string* my_string = (std::string*)userdata;
 
-using namespace bridges;
+  for (size_t i = 0; i < nmemb; i++) {
+    my_string->push_back(ptr[i]);
+  }
+
+}
 
 int main(int argc, char* argv[]) 
 {
-    // Creating new BRIDGES object.
-    Bridges bridges(350, "estark3", "75927143440");
-    bridges.setTitle("GraphCrawler Test");
-    bridges.setDescription("Accessing Movie Wikidata");
-    
-    // Setting the data source to the bridges object.
-    DataSource ds (&bridges);
+  // Initializing a new curl handle.
+  CURL *curl = curl_easy_init();
+  curl_easy_setopt(curl, CURLOPT_URL, "http://hollywood-graph-crawler.bridgesuncc.org/neighbors/Tom%20Hanks");
 
-    std::vector<MovieActorWikiData> wiki_data = ds.getMovieActorWikiData(2004, 2010);
+  std::string output;
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&output);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, output_test);
 
-    std::cout << "Movies from 2004 to 2010: " << wiki_data.size() << "\n";
+  curl_easy_perform(curl);
 
-    for (int i=0; i <5; i++) 
-    {
-        std::cout "MOVIE: " << wiki_data[i].getMovieURI() << " " << wiki_data[i].getMovieName();
-        std::cout "ACTOR: " << wiki_data[i].getActorURI() << " " << wiki_data[i].getActorName() << "\n";
-    }
+  std::cout << output << "\n";
+  
+  // From the output, perform BFS to get the immediate children of the root's children nodes, etc.
+  using namespace rapidjson;
+  Document neighbors;
+  neighbors.Parse(output.c_str());
+  std::cout << neighbors.GetParseError() << "\n";
 
-    return 0;
+  std::string nn = neighbors["neighbors"].GetString();
+  std::cout << nn << "\n";
+  
+  // Cleanup curl and return.
+  curl_easy_cleanup(curl);
+  return 0;
 }

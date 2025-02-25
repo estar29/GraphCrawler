@@ -3,9 +3,7 @@
 
 LDFLAGS=-lcurl
 LD=g++
-
 CXXFLAGS= -I ~/rapidjson/include
-CXXFLAGS= -I ~/bridges-cxx-3.4.5-x86_64-linux-gnu/include
 
 graph-crawler: graph-crawler.o
 	$(LD) -o $@ $< $(LDFLAGS)
