@@ -13,7 +13,8 @@
 // https://cplusplus.com/forum/beginner/250860/             Debugging an error with rapidjson
 // https://github.com/Tencent/rapidjson/issues/1235         Debugging ConstValueIterator issue for array traversal
 // https://stackoverflow.com/questions/18468229/concatenate-two-char-strings-in-a-c-program   How to concatenate char* strings
-// 
+// https://chatgpt.com/share/67c13d21-8054-8001-971c-f693fa675598   ChatGPT conversation about fixing a rapidjson array error.
+// https://www.geeksforgeeks.org/cpp-malloc/?ref=header_outind      Reviewing how malloc works in C++
 
 // Importing all necessary libraries.
 #include <iostream>
@@ -52,8 +53,15 @@ int main(int argc, char* argv[])
 
     // Taking in initial case.
     char* initial = (char*) malloc(sizeof(argv[1]) + 1);
-    initial = argv[1];
     char* domain = (char*) malloc(sizeof(char) * 200);
+
+    if (initial == NULL || domain == NULL)
+    {
+      std::cout << "Malloc error(s) on initial and/or domain pointers.  Exiting...";
+      return 1;
+    }
+
+    initial = argv[1];
     domain = "http://hollywood-graph-crawler.bridgesuncc.org/neighbors/";
 
     // Vectors to hold the next nodes to traverse and the visited nodes.
@@ -68,11 +76,26 @@ int main(int argc, char* argv[])
     {
       // Adding the temp string and converting to a URL friendly string.
       char* temp = (char*) malloc(sizeof(char) * 200);
-      temp = (char*) next_nodes.front();
-      char* dest = (char*) malloc(sizeof(temp) + sizeof(domain) + 1);
+      char* dest = (char*) malloc(sizeof(temp) + sizeof(domain) + 10);
+
+      if (temp == NULL || dest == NULL)
+      {
+        std::cout << "Malloc error on temp and dest pointers.  Exiting...";
+        return 1;
+      }
+
+      temp = next_nodes.front();
       strcpy(dest, domain);
 
-      char* url_string = curl_easy_escape(curl, temp, 0);
+      char* url_string = (char*) malloc(sizeof(dest) + sizeof(temp) + 1);
+
+      if (url_string == NULL) 
+      {
+        std::cout << "Malloc error on url_string pointer.  Exiting...";
+        return 1;
+      }
+
+      url_string = curl_easy_escape(curl, temp, 0);
       strcat(dest, url_string);
 
       // Making curl call using the url string.
@@ -82,7 +105,7 @@ int main(int argc, char* argv[])
       curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, print_neighbors);
       curl_easy_perform(curl);
 
-      // Free the url_string..
+      // Free the url_string.
       curl_free( (void*) url_string);
 
       // Remove temp/front from next_nodes, add to is_visited.
@@ -91,23 +114,33 @@ int main(int argc, char* argv[])
       
       // From the output, perform BFS to get the immediate children of the root's children nodes, etc.
       using namespace rapidjson;
-      Document neighbors;
-      neighbors.Parse(output.c_str());
+      Document doc;
+      doc.Parse(output.c_str());
 
-      if (neighbors.GetParseError() != 0) 
+      if (doc.GetParseError() != 0) 
       {
-        std::cout << "Parsing error with code: " << neighbors.GetParseError() << " exiting.";
+        std::cout << "Parsing error with code: " << doc.GetParseError() << " exiting.";
         return 1;
       }
 
-      // Array for children nodes.
+      // Checking that the document is an object.
+      doc.SetObject();
+
+      // Allocator for memory management.
+      Document::AllocatorType& allo = doc.GetAllocator();
+
+      // Create neighbors and ensure it is an object, then add it as an array.
+      Value neighbors(kObjectType);
+      neighbors.AddMember("neighbors", Value(kArrayType), allo);
+
+      // Finally able to then create the array of children nodes.
       Value& children = neighbors["neighbors"];
       assert(children.IsArray());
 
       // For all the children, print out their value if not in the is_visited vector.
       for (rapidjson::Value::ConstValueIterator iter1 = children.Begin(); iter1 != children.End(); iter1++)
       {
-	      // Iterate through is_visited to check if the element exists; remove element and break if yes.
+	      // Iterate through is_visited to check if the element exists; remove element if yes.
         for (size_t j = 0; j < is_visited.size(); j++)
         {
           if (iter1->GetString() == is_visited[j])
@@ -116,9 +149,11 @@ int main(int argc, char* argv[])
           }
         }
         
-        char* new_element = (char*) iter1->GetString();
+        char* new_element = (char*) malloc(sizeof(char) * 200);
+        new_element = (char*) iter1->GetString();
         is_visited.push_back(new_element);
         next_nodes.push_back(new_element);
+        free(new_element);
       }
     
     // For all of the remaining children, print them out and empty the array.
@@ -132,6 +167,7 @@ int main(int argc, char* argv[])
     curl_easy_cleanup(curl);
     free(temp);
     free(dest);
+    
     current_level++;
   }
 
