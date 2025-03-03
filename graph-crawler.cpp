@@ -15,16 +15,20 @@
 // https://stackoverflow.com/questions/18468229/concatenate-two-char-strings-in-a-c-program   How to concatenate char* strings
 // https://chatgpt.com/share/67c13d21-8054-8001-971c-f693fa675598   ChatGPT conversation about fixing a rapidjson array error.
 // https://www.geeksforgeeks.org/cpp-malloc/?ref=header_outind      Reviewing how malloc works in C++
+// https://www.geeksforgeeks.org/strdup-strdndup-functions-c/       Strdup and Strdndup function allocation documentation
+// https://www.geeksforgeeks.org/vector-erase-in-cpp-stl/           Vector erase function to clear all vector elements.
 
 // Importing all necessary libraries.
 #include <iostream>
 #include <vector>
 #include <string>
 #include <curl/curl.h>
+#include <chrono>
 #include "rapidjson/document.h"
 
 using namespace std;
 
+// Function to print out the libcurl calls.
 size_t print_neighbors(char *ptr, size_t size, size_t nmemb, void *userdata)
 {
   std::string* my_string = (std::string*)userdata;
@@ -36,66 +40,71 @@ size_t print_neighbors(char *ptr, size_t size, size_t nmemb, void *userdata)
 
 }
 
+
+
+// Main function, containing the actual BFS algorithm.
 int main(int argc, char* argv[]) 
 {
+  // Starting the run-time clock.
+  using std::chrono::high_resolution_clock;
+  using std::chrono::duration;
+  using std::chrono::duration_cast;
+  using std::chrono::seconds;
+
+  auto start_time = high_resolution_clock::now();
+
   // max_level = the max level the BFS will travel to.
   // current_level = level of the traversal the BFS is currently at.
   int max_level = std::atoi(argv[2]);
   int current_level = 0;
 
+  // Vectors to hold the next nodes to traverse and the visited nodes.
+  std::vector <char*> next_nodes;
+  std::vector <char*> is_visited;
+
+  // Temp_child array to add nodes to each pass.
+  std::vector <char*> temp_child;
+
+
+
   // Run the following when current_level is in the bounds of max_level.
   while (current_level <= max_level)
   {
     // Print out the current level of the traversal.
-    std::cout << "Level " << current_level << "\n";
+    std::cout << "---LEVEL " << current_level << "---\n" << "\n";
+    
     // Initializing a new curl handle.
     CURL *curl = curl_easy_init();
 
-    // Taking in initial case.
-    char* initial = (char*) malloc(sizeof(argv[1]) + 1);
-    char* domain = (char*) malloc(sizeof(char) * 200);
-
-    if (initial == NULL || domain == NULL)
+    // Curl initialization check.
+    if (!curl) 
     {
-      std::cout << "Malloc error(s) on initial and/or domain pointers.  Exiting...";
+      std::cout << "Error allocating memory for libcurl.  Exiting...";
       return 1;
     }
 
-    initial = argv[1];
-    domain = "http://hollywood-graph-crawler.bridgesuncc.org/neighbors/";
-
-    // Vectors to hold the next nodes to traverse and the visited nodes.
-    std::vector <char*> next_nodes;
-    std::vector <char*> is_visited;
-
+    // Taking in initial case.
+    // strdup --> copies the string and allocates memory for it.
+    char* initial = strdup(argv[1]);
+    const char* domain = "http://hollywood-graph-crawler.bridgesuncc.org/neighbors/";
+    
     // Adding the initial case to next_nodes.
     next_nodes.push_back(initial);
-  
+
     // Run while next_nodes has elements in it.
     while (next_nodes.size() != 0)
     {
-      // Adding the temp string and converting to a URL friendly string.
-      char* temp = (char*) malloc(sizeof(char) * 200);
-      char* dest = (char*) malloc(sizeof(temp) + sizeof(domain) + 10);
-
-      if (temp == NULL || dest == NULL)
-      {
-        std::cout << "Malloc error on temp and dest pointers.  Exiting...";
-        return 1;
-      }
-
-      temp = next_nodes.front();
+      // Adding the temp string.
+      char* temp = strdup(next_nodes.front());
+      char dest[256];
       strcpy(dest, domain);
 
-      char* url_string = (char*) malloc(sizeof(dest) + sizeof(temp) + 1);
+      // Remove temp from next_nodes, add to is_visited.
+      next_nodes.erase(next_nodes.begin());
+      is_visited.push_back(temp);
 
-      if (url_string == NULL) 
-      {
-        std::cout << "Malloc error on url_string pointer.  Exiting...";
-        return 1;
-      }
-
-      url_string = curl_easy_escape(curl, temp, 0);
+      // Converting temp to a URL friendly string.
+      char* url_string = curl_easy_escape(curl, temp, 0);
       strcat(dest, url_string);
 
       // Making curl call using the url string.
@@ -106,74 +115,92 @@ int main(int argc, char* argv[])
       curl_easy_perform(curl);
 
       // Free the url_string.
-      curl_free( (void*) url_string);
+      curl_free(url_string);
 
-      // Remove temp/front from next_nodes, add to is_visited.
-      next_nodes.erase(next_nodes.begin());
-      is_visited.push_back(temp);
-      
       // From the output, perform BFS to get the immediate children of the root's children nodes, etc.
       using namespace rapidjson;
       Document doc;
       doc.Parse(output.c_str());
 
+      // Checking any potential parsing errors.
       if (doc.GetParseError() != 0) 
       {
         std::cout << "Parsing error with code: " << doc.GetParseError() << " exiting.";
         return 1;
       }
 
-      // Checking that the document is an object.
-      doc.SetObject();
-
-      // Allocator for memory management.
-      Document::AllocatorType& allo = doc.GetAllocator();
-
-      // Create neighbors and ensure it is an object, then add it as an array.
-      Value neighbors(kObjectType);
-      neighbors.AddMember("neighbors", Value(kArrayType), allo);
-
-      // Finally able to then create the array of children nodes.
-      Value& children = neighbors["neighbors"];
-      assert(children.IsArray());
-
-      // For all the children, print out their value if not in the is_visited vector.
-      for (rapidjson::Value::ConstValueIterator iter1 = children.Begin(); iter1 != children.End(); iter1++)
+      // Validate the JSON object.
+      if (!doc.IsObject() || !doc.HasMember("neighbors"))
       {
-	      // Iterate through is_visited to check if the element exists; remove element if yes.
-        for (size_t j = 0; j < is_visited.size(); j++)
+        continue;
+      }
+
+      // Creating a new array to hold the neighbor nodes.
+      Value& children = doc["neighbors"];
+      if (!children.IsArray())
+      {
+        continue;
+      }
+
+      // For all the children, remove them if they have already been visited.
+      for (auto& iter1 : children.GetArray())
+      {
+        bool been_visited = false;
+
+        // Checking all nodes in the is_visited vector.
+        for (auto& visit_iter : is_visited)
         {
-          if (iter1->GetString() == is_visited[j])
+          if (iter1.GetString() == std::string(visit_iter))
           {
-            children.Erase(iter1);
+            been_visited = true;
+            break;
           }
+          
         }
         
-        char* new_element = (char*) malloc(sizeof(char) * 200);
-        new_element = (char*) iter1->GetString();
-        is_visited.push_back(new_element);
-        next_nodes.push_back(new_element);
-        free(new_element);
+        // If the nodes has been visited, delete it from the children array; else add it.
+        if (been_visited == true) 
+        {
+          children.Erase(children.Begin());
+        }
+        // Else, add the new element to temp_child and the is_visited vectors.
+        else {
+          char* new_element = strdup(iter1.GetString());
+          is_visited.push_back(new_element);
+          temp_child.push_back(new_element);
+        }
+
       }
-    
-    // For all of the remaining children, print them out and empty the array.
-    for (rapidjson::Value::ConstValueIterator iter2 = children.Begin(); iter2 != children.End(); iter2++) 
-    {
-      std::cout << iter2->GetString() << "\n";
-      children.Erase(iter2);
-    }
-    
-    // Cleanup curl, free temp and dest, increment current_level.
-    curl_easy_cleanup(curl);
-    free(temp);
-    free(dest);
-    
-    current_level++;
+
   }
+
+
+
+  // Print and add the children from the previous pass to next_nodes.
+  for (auto& temp_iter : temp_child)
+  {
+    std::cout << temp_iter << "\n";
+    next_nodes.push_back(temp_iter);
+  }
+
+  // New-line break to improve formatting.
+  std::cout << "\n";
+
+  // Clear the temp_child array.
+  temp_child.clear();
 
   // Freeing the remaining pointers.
+  curl_easy_cleanup(curl);
   free(initial);
-  free(domain);
+  current_level++;
   }
 
+  // Getting the end time of the program run.
+  auto end_time = high_resolution_clock::now();
+  duration<double> run_time = end_time - start_time;
+
+  std::cout << "\nTIME TAKEN: " << run_time.count() << " seconds";
+
+  // Exit program.
+  return 0;
 }

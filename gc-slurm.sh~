@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# Evan Stark - March 2nd 2025 - ITCS 4145 001
+# This script will print out the results and computation times
+# of several runs of the Tom Hanks node.
+
+make graph-crawler
